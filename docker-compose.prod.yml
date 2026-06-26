@@ -52,7 +52,7 @@ services:
       - "traefik.http.routers.api.rule=Host(`api.curatewithng.com`)" # Adjust to your production domain
       - "traefik.http.routers.api.entrypoints=websecure"
       - "traefik.http.routers.api.tls.certresolver=errandersresolver"
-      - "traefik.http.services.api.loadbalancer.server.port=3000"
+      - "traefik.http.services.api.loadbalancer.server.port=4000"
 
 networks:
   erranders-net:
