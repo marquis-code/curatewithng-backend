@@ -89,12 +89,14 @@ export class AuthController {
   @ApiOperation({ summary: 'Login with Firebase Google ID Token' })
   async firebaseGoogleLogin(
     @Body('token') token: string,
+    @Body('roles') roles: string[],
+    @Body('businessName') businessName: string,
     @Res({ passthrough: true }) res: Response
   ) {
     if (!token) {
       return { error: 'No token provided' };
     }
-    const result = await this.authService.firebaseGoogleLogin(token);
+    const result = await this.authService.firebaseGoogleLogin(token, roles, businessName);
     this.setAuthCookies(res, result.accessToken, result.refreshToken);
     return { user: result.user, accessToken: result.accessToken };
   }

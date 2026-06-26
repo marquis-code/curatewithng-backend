@@ -14,6 +14,7 @@ import { LoginDto } from './dto/login.dto';
 import { UserRole, JwtPayload } from '../../shared/types';
 import { RedisCacheService } from '../../shared/cache/cache.service';
 import { EmailChannel } from '../notifications/channels/email.channel';
+import { VendorsService } from '../vendors/vendors.service';
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 
@@ -27,6 +28,7 @@ export class AuthService {
     private configService: ConfigService,
     private cacheService: RedisCacheService,
     private emailChannel: EmailChannel,
+    private vendorsService: VendorsService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -35,6 +37,8 @@ export class AuthService {
       throw new ConflictException('Email already registered');
     }
 
+    const isVendor = dto.roles?.includes('VENDOR');
+    
     const passwordHash = await bcrypt.hash(dto.password, 12);
     const user = await this.usersService.create({
       email: dto.email.toLowerCase(),
@@ -42,7 +46,17 @@ export class AuthService {
       firstName: dto.firstName,
       lastName: dto.lastName,
       phone: dto.phone,
+      role: isVendor ? UserRole.VENDOR : UserRole.USER,
     });
+
+    if (isVendor) {
+      // Create an unapproved vendor profile
+      await this.vendorsService.create(user._id.toString(), {
+        businessName: dto.businessName || `${dto.firstName} ${dto.lastName} Store`,
+        categories: [],
+        location: { state: '', city: '' }
+      });
+    }
 
     this.emailChannel.sendWelcome(user.email, user.firstName).catch(e => this.logger.error(`Failed to send welcome email: ${e.message}`));
 
@@ -161,7 +175,7 @@ export class AuthService {
     return { message: 'Logged out successfully' };
   }
 
-  async firebaseGoogleLogin(firebaseIdToken: string) {
+  async firebaseGoogleLogin(firebaseIdToken: string, roles?: string[], businessName?: string) {
     let decodedToken;
     try {
       if (!getApps().length) {
@@ -207,6 +221,7 @@ export class AuthService {
         }
         await user.save();
       } else {
+        const isVendor = roles?.includes('VENDOR');
         // Create new user
         user = await this.usersService.create({
           email: email,
@@ -215,7 +230,16 @@ export class AuthService {
           lastName: lastName || 'User',
           avatar: picture,
           isVerified: true,
+          role: isVendor ? UserRole.VENDOR : UserRole.USER,
         });
+
+        if (isVendor) {
+          await this.vendorsService.create(user._id.toString(), {
+            businessName: businessName || `${firstName || 'Google'} ${lastName || 'Store'}`,
+            categories: [],
+            location: { state: '', city: '' }
+          });
+        }
         isNewUser = true;
       }
     }

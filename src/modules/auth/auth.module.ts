@@ -8,11 +8,13 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 
 import { UsersModule } from '../users/users.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { VendorsModule } from '../vendors/vendors.module';
 
 @Module({
   imports: [
     UsersModule,
     NotificationsModule,
+    VendorsModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
