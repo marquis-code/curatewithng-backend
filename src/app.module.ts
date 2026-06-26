@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AppController } from './app.controller';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { BullModule } from '@nestjs/bull';
@@ -70,6 +71,7 @@ import { SettingsModule } from './modules/settings/settings.module';
     SourcingRequestsModule,
     SettingsModule,
   ],
+  controllers: [AppController],
   providers: [
     {
       provide: APP_GUARD,
