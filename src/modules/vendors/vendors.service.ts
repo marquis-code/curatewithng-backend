@@ -178,6 +178,10 @@ export class VendorsService {
     return { total, approved, pending };
   }
 
+  async getPendingPayouts() {
+    return this.vendorModel.find({ pendingPayout: { $gt: 0 } }).sort({ updatedAt: -1 });
+  }
+
   async updateEarnings(vendorId: string, amount: number) {
     return this.vendorModel.findByIdAndUpdate(
       vendorId,

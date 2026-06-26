@@ -6,6 +6,7 @@ import { PaginationDto } from '../../shared/pagination/pagination.dto';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { UserRole } from '../../shared/types';
 
 @Controller('sourcing-requests')
 export class SourcingRequestsController {
@@ -18,35 +19,35 @@ export class SourcingRequestsController {
   }
 
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('admin')
+  @Roles(UserRole.ADMIN)
   @Get()
   findAll(@Query() query: PaginationDto) {
     return this.sourcingRequestsService.findAll(query);
   }
 
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('admin')
+  @Roles(UserRole.ADMIN)
   @Get('trending')
   findTrending() {
     return this.sourcingRequestsService.findTrending();
   }
 
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('admin')
+  @Roles(UserRole.ADMIN)
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.sourcingRequestsService.findOne(id);
   }
 
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('admin')
+  @Roles(UserRole.ADMIN)
   @Patch(':id')
   update(@Param('id') id: string, @Body() updateSourcingRequestDto: UpdateSourcingRequestDto) {
     return this.sourcingRequestsService.update(id, updateSourcingRequestDto);
   }
 
   @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @Roles('admin')
+  @Roles(UserRole.ADMIN)
   @Post(':id/quote')
   setQuote(@Param('id') id: string, @Body('amount') amount: number) {
     return this.sourcingRequestsService.setQuote(id, amount);

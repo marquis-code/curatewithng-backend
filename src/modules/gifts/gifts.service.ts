@@ -232,4 +232,13 @@ export class GiftsService {
     if (maxPrice <= 150000) return 'PREMIUM';
     return 'LUXURY';
   }
+
+  async countActiveGifts(vendorId: string): Promise<number> {
+    return this.giftModel.countDocuments({
+      vendorId: new Types.ObjectId(vendorId),
+      isActive: true,
+      isApproved: true,
+      isDeleted: false,
+    });
+  }
 }

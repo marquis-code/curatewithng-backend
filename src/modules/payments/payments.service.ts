@@ -218,6 +218,22 @@ export class PaymentsService {
     };
   }
 
+  async getPayouts() {
+    const vendors = await this.vendorsService.getPendingPayouts();
+    return vendors.map(v => ({
+      _id: v._id,
+      vendor: {
+        _id: v._id,
+        businessName: v.businessName,
+        slug: v.slug,
+        email: v.paystackSubaccountCode ? 'Has subaccount' : 'No subaccount',
+      },
+      amount: v.pendingPayout,
+      status: 'PENDING',
+      createdAt: v.updatedAt,
+    }));
+  }
+
   async approvePayout(vendorId: string, amount: number) {
     const vendor = await this.vendorsService.findById(vendorId);
     if (!vendor.paystackSubaccountCode) {

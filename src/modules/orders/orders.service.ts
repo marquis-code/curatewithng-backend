@@ -7,6 +7,7 @@ import { CreateOrderDto } from './dto/create-order.dto';
 import { OrderStatus, PaymentStatus, UserRole } from '../../shared/types';
 import { PaginationDto, createPaginatedResponse } from '../../shared/pagination/pagination.dto';
 import { GiftsService } from '../gifts/gifts.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class OrdersService {
@@ -14,6 +15,7 @@ export class OrdersService {
     @InjectModel(Order.name) private orderModel: Model<OrderDocument>,
     private giftsService: GiftsService,
     private configService: ConfigService,
+    private notificationsService: NotificationsService,
   ) {}
 
   async create(userId: string, dto: CreateOrderDto): Promise<OrderDocument> {
@@ -51,7 +53,17 @@ export class OrdersService {
       timeline: [{ status: OrderStatus.PENDING, timestamp: new Date(), note: 'Order created' }],
     });
 
-    return order.save();
+    const savedOrder = await order.save();
+
+    // Fire & Forget: Notify Admins
+    this.notificationsService.notifyAdmins({
+      type: 'order_created',
+      title: 'New Order Received!',
+      body: `Order ${orderNumber} has been placed for ₦${totalAmount.toLocaleString()}.`,
+      metadata: { orderId: savedOrder._id, orderNumber },
+    }).catch(err => console.error('Failed to notify admins:', err));
+
+    return savedOrder;
   }
 
   async findAll(query: PaginationDto & { status?: string; userId?: string; vendorId?: string }) {
@@ -169,11 +181,17 @@ export class OrdersService {
       if (dateTo) (filter.createdAt as Record<string, Date>).$lte = dateTo;
     }
 
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
+    sixMonthsAgo.setDate(1);
+    sixMonthsAgo.setHours(0, 0, 0, 0);
+
     const [
       totalOrders,
       totalGMV,
       statusBreakdown,
       todayOrders,
+      revenueOverTime,
     ] = await Promise.all([
       this.orderModel.countDocuments(filter),
       this.orderModel.aggregate([
@@ -187,6 +205,27 @@ export class OrdersService {
       this.orderModel.countDocuments({
         createdAt: { $gte: new Date(new Date().setHours(0, 0, 0, 0)) },
       }),
+      this.orderModel.aggregate([
+        {
+          $match: {
+            ...filter,
+            paymentStatus: PaymentStatus.PAID,
+            createdAt: { $gte: sixMonthsAgo },
+          },
+        },
+        {
+          $group: {
+            _id: {
+              year: { $year: '$createdAt' },
+              month: { $month: '$createdAt' },
+            },
+            revenue: { $sum: '$platformFee' },
+            gmv: { $sum: '$totalAmount' },
+            orders: { $sum: 1 },
+          },
+        },
+        { $sort: { '_id.year': 1, '_id.month': 1 } },
+      ]),
     ]);
 
     return {
@@ -195,6 +234,13 @@ export class OrdersService {
       gmv: totalGMV[0]?.total || 0,
       platformRevenue: totalGMV[0]?.platformFees || 0,
       statusBreakdown,
+      revenueOverTime: revenueOverTime.map((item) => ({
+        month: new Date(item._id.year, item._id.month - 1).toLocaleString('default', { month: 'short' }),
+        year: item._id.year,
+        revenue: item.revenue,
+        gmv: item.gmv,
+        orders: item.orders,
+      })),
     };
   }
 
@@ -221,9 +267,8 @@ export class OrdersService {
 
   async getVendorStats(vendorId: string) {
     const today = new Date(new Date().setHours(0, 0, 0, 0));
-    const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-
-    const [todayOrders, monthRevenue] = await Promise.all([
+    
+    const [todayOrders, monthRevenue, lifetimeEarnings, pendingPayout, activeGifts] = await Promise.all([
       this.orderModel.countDocuments({
         'items.vendorId': new Types.ObjectId(vendorId),
         createdAt: { $gte: today },
@@ -233,16 +278,40 @@ export class OrdersService {
           $match: {
             'items.vendorId': new Types.ObjectId(vendorId),
             paymentStatus: PaymentStatus.PAID,
-            createdAt: { $gte: monthStart },
+            createdAt: { $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) },
           },
         },
         { $group: { _id: null, total: { $sum: '$vendorAmount' } } },
       ]),
+      this.orderModel.aggregate([
+        {
+          $match: {
+            'items.vendorId': new Types.ObjectId(vendorId),
+            paymentStatus: PaymentStatus.PAID,
+            status: OrderStatus.DELIVERED,
+          },
+        },
+        { $group: { _id: null, total: { $sum: '$vendorAmount' } } },
+      ]),
+      this.orderModel.aggregate([
+        {
+          $match: {
+            'items.vendorId': new Types.ObjectId(vendorId),
+            paymentStatus: PaymentStatus.PAID,
+            status: { $in: [OrderStatus.PENDING, OrderStatus.PROCESSING, OrderStatus.SHIPPED] },
+          },
+        },
+        { $group: { _id: null, total: { $sum: '$vendorAmount' } } },
+      ]),
+      this.giftsService.countActiveGifts(vendorId),
     ]);
 
     return {
       todayOrders,
       monthRevenue: monthRevenue[0]?.total || 0,
+      totalEarnings: lifetimeEarnings[0]?.total || 0,
+      pendingPayout: pendingPayout[0]?.total || 0,
+      activeGifts,
     };
   }
 

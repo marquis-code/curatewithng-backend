@@ -18,10 +18,15 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { PaginationDto } from '../../shared/pagination/pagination.dto';
 import { UserRole, OrderStatus } from '../../shared/types';
 
+import { VendorsService } from '../vendors/vendors.service';
+
 @ApiTags('Orders')
 @Controller('orders')
 export class OrdersController {
-  constructor(private readonly ordersService: OrdersService) {}
+  constructor(
+    private readonly ordersService: OrdersService,
+    private readonly vendorsService: VendorsService,
+  ) {}
 
   @Post()
   @UseGuards(AuthGuard('jwt'))
@@ -54,6 +59,18 @@ export class OrdersController {
     return this.ordersService.getStats();
   }
 
+  @Get('vendor/me/stats')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(UserRole.VENDOR, UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get dashboard stats for my vendor profile' })
+  async getVendorStats(
+    @CurrentUser('sub') userId: string,
+  ) {
+    const vendor = await this.vendorsService.findByUserId(userId);
+    return this.ordersService.getVendorStats(vendor._id.toString());
+  }
+
   @Get('vendor/me')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles(UserRole.VENDOR, UserRole.ADMIN)
@@ -63,8 +80,8 @@ export class OrdersController {
     @CurrentUser('sub') userId: string,
     @Query() query: PaginationDto & { status?: string },
   ) {
-    // In production, look up vendorId from userId
-    return this.ordersService.getVendorOrders(userId, query);
+    const vendor = await this.vendorsService.findByUserId(userId);
+    return this.ordersService.getVendorOrders(vendor._id.toString(), query);
   }
 
   @Get(':id')

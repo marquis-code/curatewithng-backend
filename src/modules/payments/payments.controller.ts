@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Headers, UseGuards, Param, Req } from '@nestjs/common';
+import { Controller, Post, Get, Body, Headers, UseGuards, Param, Req } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { PaymentsService } from './payments.service';
@@ -41,6 +41,15 @@ export class PaymentsController {
     @Body() body: any,
   ) {
     return this.paymentsService.handleWebhook(signature, body);
+  }
+
+  @Get('payouts')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get all pending payouts (admin)' })
+  async getPayouts() {
+    return this.paymentsService.getPayouts();
   }
 
   @Post('payout/request')

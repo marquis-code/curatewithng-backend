@@ -6,6 +6,7 @@ import { PaginationDto, createPaginatedResponse } from '../../shared/pagination/
 import { NotificationsGateway } from './notifications.gateway';
 import { EmailChannel } from './channels/email.channel';
 import { UsersService } from '../users/users.service';
+import { UserRole } from '../../shared/types';
 
 @Injectable()
 export class NotificationsService {
@@ -94,5 +95,21 @@ export class NotificationsService {
       userId: new Types.ObjectId(userId),
       isRead: false,
     });
+  }
+
+  async notifyAdmins(data: { type: string; title: string; body: string; metadata?: Record<string, unknown> }) {
+    const adminUsersResult = await this.usersService.findAll({ page: 1, limit: 100, role: UserRole.ADMIN });
+    const admins = adminUsersResult.data;
+
+    const promises = admins.map(admin =>
+      this.create({
+        userId: admin._id.toString(),
+        type: data.type,
+        title: data.title,
+        body: data.body,
+        metadata: data.metadata,
+      })
+    );
+    await Promise.allSettled(promises);
   }
 }
