@@ -31,13 +31,12 @@ export class EmailProcessor {
   }
 
   @Process('send-order-confirmation')
-  async handleOrderConfirmation(job: Job<{ to: string; name: string; orderNumber: string; totalAmount: number }>) {
+  async handleOrderConfirmation(job: Job<{ to: string; name: string; order: any }>) {
     try {
       await this.emailChannel.sendOrderConfirmation(
         job.data.to,
         job.data.name,
-        job.data.orderNumber,
-        job.data.totalAmount,
+        job.data.order,
       );
     } catch (error) {
       this.logger.error(`Failed to send order confirmation:`, error);

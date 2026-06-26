@@ -2,7 +2,7 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
-import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 import { CurationSession, CurationSessionDocument } from './schemas/curation-session.schema';
 import { GenerateCurationDto } from './dto/generate-curation.dto';
 import { GiftsService } from '../gifts/gifts.service';
@@ -12,7 +12,7 @@ import { PaginationDto, createPaginatedResponse } from '../../shared/pagination/
 @Injectable()
 export class AiCuratorService {
   private readonly logger = new Logger(AiCuratorService.name);
-  private anthropic: Anthropic;
+  private openai: OpenAI;
 
   constructor(
     @InjectModel(CurationSession.name) private sessionModel: Model<CurationSessionDocument>,
@@ -20,8 +20,9 @@ export class AiCuratorService {
     private configService: ConfigService,
     private cacheService: RedisCacheService,
   ) {
-    this.anthropic = new Anthropic({
-      apiKey: this.configService.get<string>('ANTHROPIC_API_KEY'),
+    this.openai = new OpenAI({
+      apiKey: this.configService.get<string>('GROQ_API_KEY'),
+      baseURL: "https://api.groq.com/openai/v1",
     });
   }
 
@@ -43,21 +44,18 @@ export class AiCuratorService {
       dto.budgetMax,
     );
 
-    if (productPool.length === 0) {
-      return {
-        recommendations: [],
-        message: 'No gifts found matching your criteria. Try adjusting your budget or occasion.',
-      };
-    }
 
-    // 3. Build Claude prompt
-    const systemPrompt = `You are GiftGenius, an expert Nigerian gift curator. Your role is to recommend the most thoughtful and appropriate gifts from a curated catalogue for a specific recipient. You understand Nigerian culture, gifting occasions like Owambe, weddings, and corporate events, and you prioritise gifts that feel personal and meaningful. Always respond with a valid JSON array only. No prose, no markdown, no explanation outside the JSON.`;
+
+    // 3. Build Groq prompt
+    const systemPrompt = `You are GiftGenius, an expert Nigerian gift curator. Your role is to recommend the most thoughtful and appropriate gifts for a specific recipient. You understand Nigerian culture, gifting occasions like Owambe, weddings, and corporate events, and you prioritise gifts that feel personal and meaningful.
+You can choose to recommend physical gifts from the provided catalogue, OR you can invent completely new, abstract custom gift ideas if the catalogue doesn't have the perfect match.
+Always respond with a valid JSON object. It MUST contain a "recommendations" array. No prose, no markdown.`;
 
     const productList = productPool.map((p) => ({
       giftId: p._id.toString(),
       name: p.name,
       category: p.category,
-      price: p.price,
+      price: p.price / 100, // Convert kobo to Naira for the AI
       tags: p.tags,
       occasions: p.occasions,
       recipientTypes: p.recipientTypes,
@@ -69,51 +67,64 @@ About them: ${dto.age ? `${dto.age} years old, ` : ''}${dto.gender || 'not speci
 Occasion: ${dto.occasion}. Budget: ₦${(dto.budgetMin / 100).toLocaleString()} – ₦${(dto.budgetMax / 100).toLocaleString()}.
 ${dto.additionalNotes ? `Additional context: ${dto.additionalNotes}.` : ''}
 
-Here are the available gifts in our catalogue:
+Here are the available physical gifts in our catalogue:
 ${JSON.stringify(productList)}
 
-Return a JSON array of up to 8 gift recommendations ranked by suitability.
-Each object must have: giftId (string), score (number 0-100), reasoning (string, max 30 words).`;
+Return a JSON object containing a "recommendations" array of up to 8 gift recommendations ranked by suitability.
+For catalog gifts, the object in the array MUST have: "giftId" (string), "score" (number 0-100), "reasoning" (string, max 30 words), "isCustom": false.
+For custom abstract ideas, the object in the array MUST have: "customName" (string), "customDescription" (string), "estimatedPrice" (number, in Naira), "score" (number), "reasoning" (string), "isCustom": true.`;
 
-    // 4. Call Claude API
+    // 4. Call Groq API
     let aiResponseText = '';
     try {
-      const message = await this.anthropic.messages.create({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1500,
-        temperature: 0.7,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userPrompt }],
+      const completion = await this.openai.chat.completions.create({
+        model: 'llama-3.3-70b-versatile', // Updated to currently supported 70b versatile model
+        max_completion_tokens: 1500,
+        temperature: 0.6,
+        response_format: { type: 'json_object' },
+        messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
       });
 
-      const textBlock = message.content.find((block) => block.type === 'text');
-      aiResponseText = textBlock ? textBlock.text : '';
+      aiResponseText = completion.choices[0]?.message?.content || '';
     } catch (error) {
-      this.logger.error('Claude API error:', error);
+      this.logger.error('Groq API error:', error);
       throw new BadRequestException('AI curation service temporarily unavailable. Please try again.');
     }
 
     // 5. Parse AI response
-    let recommendations: Array<{ giftId: string; score: number; reasoning: string }> = [];
+    let recommendations: Array<{
+      giftId?: string;
+      isCustom?: boolean;
+      customName?: string;
+      customDescription?: string;
+      estimatedPrice?: number;
+      score: number;
+      reasoning: string;
+    }> = [];
     try {
       // Extract JSON from response (handle potential markdown wrapping)
       let jsonStr = aiResponseText.trim();
       if (jsonStr.startsWith('```')) {
         jsonStr = jsonStr.replace(/```json?\n?/g, '').replace(/```$/g, '').trim();
       }
-      recommendations = JSON.parse(jsonStr);
+      const parsed = JSON.parse(jsonStr);
+      recommendations = parsed.recommendations || [];
+      if (!Array.isArray(recommendations)) {
+        recommendations = [];
+      }
     } catch {
-      this.logger.error('Failed to parse Claude response:', aiResponseText);
+      this.logger.error('Failed to parse Groq response:', aiResponseText);
       // Fallback: return products sorted by relevance
       recommendations = productPool.slice(0, 8).map((p, i) => ({
         giftId: p._id.toString(),
         score: 90 - i * 5,
         reasoning: 'Matches your criteria based on occasion and budget.',
+        isCustom: false
       }));
     }
 
     // 6. Re-fetch full product documents
-    const giftIds = recommendations.map((r) => r.giftId);
+    const giftIds = recommendations.filter((r) => !r.isCustom && r.giftId).map((r) => r.giftId!);
     const fullProducts = await Promise.all(
       giftIds.map(async (id) => {
         try {
@@ -127,9 +138,24 @@ Each object must have: giftId (string), score (number 0-100), reasoning (string,
     // 7. Merge reasoning and score into products
     const enrichedRecommendations = recommendations
       .map((rec) => {
+        if (rec.isCustom) {
+          return {
+            isCustom: true,
+            customGift: {
+              name: rec.customName,
+              description: rec.customDescription,
+              price: (rec.estimatedPrice || 0) * 100, // convert back to kobo for frontend consistency
+              currency: 'NGN',
+            },
+            score: rec.score,
+            reasoning: rec.reasoning,
+          };
+        }
+
         const product = fullProducts.find((p) => p && p._id.toString() === rec.giftId);
         if (!product) return null;
         return {
+          isCustom: false,
           gift: product,
           score: rec.score,
           reasoning: rec.reasoning,
@@ -152,11 +178,21 @@ Each object must have: giftId (string), score (number 0-100), reasoning (string,
       },
       aiPrompt: userPrompt,
       aiResponse: aiResponseText,
-      recommendations: recommendations.map((r) => ({
-        giftId: new Types.ObjectId(r.giftId),
-        score: r.score,
-        reasoning: r.reasoning,
-      })),
+      recommendations: recommendations.map((r) => {
+        const mapped: any = {
+          score: r.score,
+          reasoning: r.reasoning,
+          isCustom: r.isCustom || false,
+        };
+        if (r.isCustom) {
+          mapped.customName = r.customName;
+          mapped.customDescription = r.customDescription;
+          mapped.estimatedPrice = r.estimatedPrice;
+        } else if (r.giftId) {
+          mapped.giftId = new Types.ObjectId(r.giftId);
+        }
+        return mapped;
+      }),
     });
     await session.save();
 

@@ -2,20 +2,21 @@ import { Process, Processor } from '@nestjs/bull';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bull';
 import { ConfigService } from '@nestjs/config';
-import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 import { GiftsService } from '../modules/gifts/gifts.service';
 
 @Processor('ai-queue')
 export class AiProcessor {
   private readonly logger = new Logger(AiProcessor.name);
-  private anthropic: Anthropic;
+  private openai: OpenAI;
 
   constructor(
     private giftsService: GiftsService,
     private configService: ConfigService,
   ) {
-    this.anthropic = new Anthropic({
-      apiKey: this.configService.get<string>('ANTHROPIC_API_KEY'),
+    this.openai = new OpenAI({
+      apiKey: this.configService.get<string>('GROQ_API_KEY'),
+      baseURL: "https://api.groq.com/openai/v1",
     });
   }
 
@@ -26,21 +27,20 @@ export class AiProcessor {
     try {
       const { giftId, name, description, category } = job.data;
 
-      const message = await this.anthropic.messages.create({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 300,
+      const completion = await this.openai.chat.completions.create({
+        model: 'openai/gpt-oss-20b',
+        max_completion_tokens: 300,
         temperature: 0.3,
-        system: 'You are a gift tagging AI. Given a gift product, generate relevant tags for search and curation matching. Return ONLY a JSON array of 5-10 lowercase tags. No prose.',
         messages: [
           {
             role: 'user',
-            content: `Product: ${name}\nCategory: ${category}\nDescription: ${description}\n\nGenerate search/curation tags as a JSON array.`,
+            content: `You are a gift tagging AI. Given a gift product, generate relevant tags for search and curation matching. Return ONLY a JSON array of 5-10 lowercase tags. No prose.\n\nProduct: ${name}\nCategory: ${category}\nDescription: ${description}\n\nGenerate search/curation tags as a JSON array.`,
           },
         ],
+        reasoning_effort: 'low',
       });
 
-      const textBlock = message.content.find((block) => block.type === 'text');
-      const responseText = textBlock ? textBlock.text : '[]';
+      const responseText = completion.choices[0]?.message?.content || '[]';
 
       let tags: string[] = [];
       try {

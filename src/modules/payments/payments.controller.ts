@@ -23,6 +23,17 @@ export class PaymentsController {
     return this.paymentsService.initiatePayment(orderId, email);
   }
 
+  @Post('sourcing/:id/initiate')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Initiate Paystack payment for sourcing quote' })
+  async initiateSourcing(
+    @Param('id') id: string,
+    @CurrentUser('email') email: string,
+  ) {
+    return this.paymentsService.initiateSourcingPayment(id, email);
+  }
+
   @Post('webhook')
   @ApiOperation({ summary: 'Handle Paystack webhook' })
   async webhook(

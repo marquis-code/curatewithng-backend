@@ -87,6 +87,9 @@ export class User {
   @Prop({ type: [Recipient], default: [] })
   recipients: Recipient[];
 
+  @Prop({ type: [{ type: String, ref: 'Gift' }], default: [] })
+  savedGifts: any[];
+
   @Prop({ type: CorporateProfile })
   corporateProfile: CorporateProfile;
 

@@ -3,6 +3,7 @@ import {
   UnauthorizedException,
   ConflictException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -12,14 +13,20 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { UserRole, JwtPayload } from '../../shared/types';
 import { RedisCacheService } from '../../shared/cache/cache.service';
+import { EmailChannel } from '../notifications/channels/email.channel';
+import { initializeApp, cert, getApps } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
     private configService: ConfigService,
     private cacheService: RedisCacheService,
+    private emailChannel: EmailChannel,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -36,6 +43,8 @@ export class AuthService {
       lastName: dto.lastName,
       phone: dto.phone,
     });
+
+    this.emailChannel.sendWelcome(user.email, user.firstName).catch(e => this.logger.error(`Failed to send welcome email: ${e.message}`));
 
     const tokens = await this.generateTokens(user._id.toString(), user.email, user.role);
     return {
@@ -65,6 +74,51 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
+    if (user.role === UserRole.ADMIN) {
+      // Generate 6-digit OTP
+      const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+      
+      // Store in Redis with 10-minute expiry
+      await this.cacheService.set(`admin_otp:${user.email}`, otpCode, 600);
+      
+      // Dispatch email
+      this.emailChannel.sendAdminOtp(user.email, user.firstName, otpCode).catch(e => this.logger.error(`Failed to send Admin OTP: ${e.message}`));
+      
+      return { requiresOtp: true, email: user.email };
+    }
+
+    this.emailChannel.sendLoginAlert(user.email, user.firstName, new Date().toLocaleString(), 'Unknown Device').catch(e => this.logger.error(`Failed to send login alert: ${e.message}`));
+
+    const tokens = await this.generateTokens(user._id.toString(), user.email, user.role);
+    return {
+      user: {
+        id: user._id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+        avatar: user.avatar,
+      },
+      ...tokens,
+    };
+  }
+
+  async verifyAdminOtp(email: string, otp: string) {
+    const user = await this.usersService.findByEmail(email);
+    if (!user || user.role !== UserRole.ADMIN) {
+      throw new UnauthorizedException('Invalid verification attempt');
+    }
+
+    const storedOtp = await this.cacheService.get<string | number>(`admin_otp:${email}`);
+    if (!storedOtp || String(storedOtp) !== String(otp)) {
+      throw new UnauthorizedException('Invalid or expired verification code');
+    }
+
+    // OTP verified successfully, delete it
+    await this.cacheService.del(`admin_otp:${email}`);
+
+    this.emailChannel.sendLoginAlert(user.email, user.firstName, new Date().toLocaleString(), 'Unknown Device').catch(e => this.logger.error(`Failed to send login alert: ${e.message}`));
+
     const tokens = await this.generateTokens(user._id.toString(), user.email, user.role);
     return {
       user: {
@@ -92,7 +146,8 @@ export class AuthService {
       }
 
       const user = await this.usersService.findById(payload.sub);
-      const tokens = await this.generateTokens(user._id.toString(), user.email, user.role);
+      const tokens = await this.generateTokens(
+        user._id.toString(), user.email, user.role);
       return tokens;
     } catch {
       throw new UnauthorizedException('Invalid refresh token');
@@ -109,23 +164,25 @@ export class AuthService {
   async firebaseGoogleLogin(firebaseIdToken: string) {
     let decodedToken;
     try {
-      const admin = require('firebase-admin');
-      if (!admin.apps.length) {
+      if (!getApps().length) {
         const projectId = this.configService.get<string>('FIREBASE_PROJECT_ID');
         const clientEmail = this.configService.get<string>('FIREBASE_CLIENT_EMAIL');
-        const privateKey = this.configService.get<string>('FIREBASE_PRIVATE_KEY')?.replace(/\\n/g, '\n');
+        // Handle potential double quotes if present in env vars
+        let privateKey = this.configService.get<string>('FIREBASE_PRIVATE_KEY') || '';
+        privateKey = privateKey.replace(/^"|"$/g, '').replace(/\\n/g, '\n');
 
-        admin.initializeApp({
-          credential: admin.credential.cert({
+        initializeApp({
+          credential: cert({
             projectId,
             clientEmail,
             privateKey,
           }),
         });
       }
-      decodedToken = await admin.auth().verifyIdToken(firebaseIdToken);
+      decodedToken = await getAuth().verifyIdToken(firebaseIdToken);
     } catch (error) {
-      throw new UnauthorizedException('Invalid Firebase ID token');
+      this.logger.error('Firebase Auth Error:', error);
+      throw new UnauthorizedException(`Invalid Firebase ID token: ${(error as any).message}`);
     }
 
     const { email, name, picture, uid } = decodedToken;
@@ -138,6 +195,7 @@ export class AuthService {
     const lastName = lastNames.join(' ');
 
     let user = await this.usersService.findByGoogleId(uid);
+    let isNewUser = false;
 
     if (!user) {
       user = await this.usersService.findByEmail(email);
@@ -158,7 +216,14 @@ export class AuthService {
           avatar: picture,
           isVerified: true,
         });
+        isNewUser = true;
       }
+    }
+
+    if (isNewUser) {
+      this.emailChannel.sendWelcome(user.email, user.firstName).catch(e => this.logger.error(`Failed to send welcome email: ${e.message}`));
+    } else {
+      this.emailChannel.sendLoginAlert(user.email, user.firstName, new Date().toLocaleString(), 'Unknown Device').catch(e => this.logger.error(`Failed to send login alert: ${e.message}`));
     }
 
     const tokens = await this.generateTokens(user._id.toString(), user.email, user.role);

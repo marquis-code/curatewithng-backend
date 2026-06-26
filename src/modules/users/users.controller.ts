@@ -65,6 +65,17 @@ export class UsersController {
     return this.usersService.removeRecipient(userId, index);
   }
 
+  @Post('me/saved-gifts/:giftId')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Toggle saved gift (wishlist)' })
+  async toggleSavedGift(
+    @CurrentUser('sub') userId: string,
+    @Param('giftId') giftId: string,
+  ) {
+    return this.usersService.toggleSavedGift(userId, giftId);
+  }
+
   @Patch('me/preferences')
   @UseGuards(AuthGuard('jwt'))
   @ApiBearerAuth()

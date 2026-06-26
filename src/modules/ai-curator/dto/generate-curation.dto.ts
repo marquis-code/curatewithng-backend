@@ -9,7 +9,7 @@ export class GenerateCurationDto {
 
   @ApiProperty({ example: 'sister' })
   @IsString()
-  relationship: string;
+  relationship!: string;
 
   @ApiPropertyOptional({ example: 28 })
   @IsOptional()
@@ -24,21 +24,21 @@ export class GenerateCurationDto {
   @ApiProperty({ example: ['fashion', 'skincare', 'cooking'] })
   @IsArray()
   @IsString({ each: true })
-  interests: string[];
+  interests!: string[];
 
   @ApiProperty({ example: 'birthday' })
   @IsString()
-  occasion: string;
+  occasion!: string;
 
   @ApiProperty({ example: 10000, description: 'Minimum budget in kobo' })
   @IsNumber()
   @Min(0)
-  budgetMin: number;
+  budgetMin!: number;
 
   @ApiProperty({ example: 50000, description: 'Maximum budget in kobo' })
   @IsNumber()
   @Min(0)
-  budgetMax: number;
+  budgetMax!: number;
 
   @ApiPropertyOptional({ example: 'She loves everything pink and recently started a new job' })
   @IsOptional()

@@ -15,6 +15,8 @@ import { MediaModule } from './modules/media/media.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { QueueModule } from './queues/queue.module';
 import { CacheModule } from './shared/cache/cache.module';
+import { SourcingRequestsModule } from './modules/sourcing-requests/sourcing-requests.module';
+import { SettingsModule } from './modules/settings/settings.module';
 
 @Module({
   imports: [
@@ -65,6 +67,8 @@ import { CacheModule } from './shared/cache/cache.module';
     MediaModule,
     NotificationsModule,
     QueueModule,
+    SourcingRequestsModule,
+    SettingsModule,
   ],
   providers: [
     {

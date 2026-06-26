@@ -30,7 +30,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Register a new user' })
   async register(@Body() dto: RegisterDto, @Res({ passthrough: true }) res: Response) {
     const result = await this.authService.register(dto);
-    this.setRefreshTokenCookie(res, result.refreshToken);
+    this.setAuthCookies(res, result.accessToken, result.refreshToken);
     return { user: result.user, accessToken: result.accessToken };
   }
 
@@ -39,7 +39,22 @@ export class AuthController {
   @ApiOperation({ summary: 'Login with email and password' })
   async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
     const result = await this.authService.login(dto);
-    this.setRefreshTokenCookie(res, result.refreshToken);
+    
+    if ('requiresOtp' in result) {
+      return result;
+    }
+
+    const authResult = result as any;
+    this.setAuthCookies(res, authResult.accessToken, authResult.refreshToken);
+    return { user: authResult.user, accessToken: authResult.accessToken };
+  }
+
+  @Post('verify-admin-otp')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify Admin OTP for login' })
+  async verifyAdminOtp(@Body('email') email: string, @Body('otp') otp: string, @Res({ passthrough: true }) res: Response) {
+    const result = await this.authService.verifyAdminOtp(email, otp);
+    this.setAuthCookies(res, result.accessToken, result.refreshToken);
     return { user: result.user, accessToken: result.accessToken };
   }
 
@@ -52,7 +67,7 @@ export class AuthController {
       return { error: 'No refresh token provided' };
     }
     const tokens = await this.authService.refreshToken(refreshToken);
-    this.setRefreshTokenCookie(res, tokens.refreshToken);
+    this.setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
     return { accessToken: tokens.accessToken };
   }
 
@@ -65,6 +80,7 @@ export class AuthController {
       await this.authService.logout(refreshToken);
     }
     res.clearCookie('refreshToken');
+    res.clearCookie('accessToken');
     return { message: 'Logged out successfully' };
   }
 
@@ -79,7 +95,7 @@ export class AuthController {
       return { error: 'No token provided' };
     }
     const result = await this.authService.firebaseGoogleLogin(token);
-    this.setRefreshTokenCookie(res, result.refreshToken);
+    this.setAuthCookies(res, result.accessToken, result.refreshToken);
     return { user: result.user, accessToken: result.accessToken };
   }
 
@@ -109,11 +125,21 @@ export class AuthController {
     return this.authService.verifyEmail(userId);
   }
 
-  private setRefreshTokenCookie(res: Response, token: string) {
-    res.cookie('refreshToken', token, {
+  private setAuthCookies(res: Response, accessToken: string, refreshToken: string) {
+    const isProd = this.configService.get<string>('NODE_ENV') === 'production';
+    
+    res.cookie('accessToken', accessToken, {
       httpOnly: true,
-      secure: this.configService.get<string>('NODE_ENV') === 'production',
-      sameSite: 'strict',
+      secure: isProd,
+      sameSite: 'lax', // Lax is better for local dev with different ports
+      maxAge: 60 * 60 * 1000, // 1 hour (match your JWT_EXPIRY if possible, or leave generous)
+      path: '/',
+    });
+
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       path: '/',
     });

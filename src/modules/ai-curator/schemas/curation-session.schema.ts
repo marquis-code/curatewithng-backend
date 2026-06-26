@@ -32,8 +32,20 @@ export class RecipientProfile {
 
 @Schema({ _id: false })
 export class Recommendation {
-  @Prop({ type: Types.ObjectId, ref: 'Gift' })
-  giftId: Types.ObjectId;
+  @Prop({ type: Types.ObjectId, ref: 'Gift', required: false })
+  giftId?: Types.ObjectId;
+
+  @Prop({ default: false })
+  isCustom: boolean;
+
+  @Prop({ required: false })
+  customName?: string;
+
+  @Prop({ required: false })
+  customDescription?: string;
+
+  @Prop({ required: false })
+  estimatedPrice?: number;
 
   @Prop()
   score: number;

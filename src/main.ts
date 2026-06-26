@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import helmet from 'helmet';
+import * as cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
@@ -12,19 +13,16 @@ async function bootstrap() {
     logger: new WinstonLoggerService(),
   });
 
-  // Security
+  // Security & Cookies
   app.use(helmet());
+  app.use(cookieParser());
 
   // CORS
   app.enableCors({
-    origin: [
-      process.env.FRONTEND_URL || 'http://localhost:3001',
-      process.env.VENDOR_URL || 'http://localhost:3002',
-      process.env.ADMIN_URL || 'http://localhost:3003',
-    ],
+    origin: true, // Reflects the request origin, which solves CORS for all localhost ports
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
   });
 
   // Global pipes

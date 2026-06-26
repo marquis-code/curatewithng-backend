@@ -9,12 +9,14 @@ import { PaginationDto, createPaginatedResponse } from '../../shared/pagination/
 import { EncryptionUtil } from '../../shared/utils/encryption.util';
 import { UsersService } from '../users/users.service';
 import { UserRole } from '../../shared/types';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class VendorsService {
   constructor(
     @InjectModel(Vendor.name) private vendorModel: Model<VendorDocument>,
     private usersService: UsersService,
+    private notificationsService: NotificationsService,
   ) {}
 
   async create(userId: string, dto: CreateVendorDto): Promise<VendorDocument> {
@@ -131,6 +133,18 @@ export class VendorsService {
 
     // Update user role to VENDOR
     await this.usersService.update(vendor.userId.toString(), { role: UserRole.VENDOR } as any);
+    
+    // Trigger in-app notification
+    await this.notificationsService.create({
+      userId: vendor.userId.toString(),
+      type: 'VENDOR_APPROVED',
+      title: 'Vendor Account Approved!',
+      body: `Congratulations! Your vendor profile for "${vendor.businessName}" has been approved. You can now start selling.`,
+      metadata: {
+        vendorId: vendor._id.toString()
+      }
+    });
+    
     return vendor;
   }
 
@@ -141,6 +155,17 @@ export class VendorsService {
       { new: true },
     );
     if (!vendor) throw new NotFoundException('Vendor not found');
+
+    await this.notificationsService.create({
+      userId: vendor.userId.toString(),
+      type: 'VENDOR_REJECTED',
+      title: 'Vendor Account Update',
+      body: `Your vendor profile for "${vendor.businessName}" could not be approved at this time. Please contact support for details.`,
+      metadata: {
+        vendorId: vendor._id.toString()
+      }
+    });
+
     return vendor;
   }
 

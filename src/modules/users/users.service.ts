@@ -12,7 +12,7 @@ export class UsersService {
   ) {}
 
   async findById(id: string): Promise<UserDocument> {
-    const user = await this.userModel.findById(id).select('-passwordHash');
+    const user = await this.userModel.findById(id).select('-passwordHash').populate('savedGifts');
     if (!user) {
       throw new NotFoundException('User not found');
     }
@@ -83,6 +83,19 @@ export class UsersService {
     const user = await this.findById(userId);
     user.recipients.splice(recipientIndex, 1);
     return user.save();
+  }
+
+  async toggleSavedGift(userId: string, giftId: string) {
+    const user = await this.userModel.findById(userId);
+    if (!user) throw new NotFoundException('User not found');
+    const index = user.savedGifts.findIndex((id) => id.toString() === giftId);
+    if (index > -1) {
+      user.savedGifts.splice(index, 1);
+    } else {
+      user.savedGifts.push(giftId);
+    }
+    await user.save();
+    return this.findById(userId);
   }
 
   async updatePreferences(userId: string, preferences: User['preferences']) {
