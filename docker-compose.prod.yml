@@ -49,7 +49,7 @@ services:
     labels:
       - "traefik.enable=true"
       # HTTPS router
-      - "traefik.http.routers.api.rule=Host(`api.erranders.org`)" # Adjust to your production domain
+      - "traefik.http.routers.api.rule=Host(`api.curatewithng.com`)" # Adjust to your production domain
       - "traefik.http.routers.api.entrypoints=websecure"
       - "traefik.http.routers.api.tls.certresolver=errandersresolver"
       - "traefik.http.services.api.loadbalancer.server.port=3000"
