@@ -35,4 +35,19 @@ export class RegisterDto {
   @IsOptional()
   @IsString()
   businessName?: string;
+
+  @ApiPropertyOptional({ example: 'Lagos' })
+  @IsOptional()
+  @IsString()
+  state?: string;
+
+  @ApiPropertyOptional({ example: 'Ikeja' })
+  @IsOptional()
+  @IsString()
+  city?: string;
+
+  @ApiPropertyOptional({ example: '123 Main St' })
+  @IsOptional()
+  @IsString()
+  address?: string;
 }

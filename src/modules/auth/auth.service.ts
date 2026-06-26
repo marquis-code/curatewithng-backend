@@ -54,7 +54,11 @@ export class AuthService {
       await this.vendorsService.create(user._id.toString(), {
         businessName: dto.businessName || `${dto.firstName} ${dto.lastName} Store`,
         categories: [],
-        location: { state: '', city: '' }
+        location: { 
+          state: dto.state || 'N/A', 
+          city: dto.city || 'N/A',
+          address: dto.address || ''
+        }
       });
     }
 
@@ -234,10 +238,12 @@ export class AuthService {
         });
 
         if (isVendor) {
+          // If we receive state/city from Google login flow in the future we can pass them here. 
+          // Defaulting to "N/A" prevents 500 crashes since they are required.
           await this.vendorsService.create(user._id.toString(), {
             businessName: businessName || `${firstName || 'Google'} ${lastName || 'Store'}`,
             categories: [],
-            location: { state: '', city: '' }
+            location: { state: 'N/A', city: 'N/A', address: '' }
           });
         }
         isNewUser = true;
