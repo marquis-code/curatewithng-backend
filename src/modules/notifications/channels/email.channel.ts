@@ -38,15 +38,15 @@ export class EmailChannel {
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>CurateWithNG</title>
         <style>
-          body { margin: 0; padding: 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
-          .container { max-width: 500px; margin: 40px auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03); border: 1px solid #e2e8f0; }
-          .header { padding: 24px 20px; text-align: center; border-bottom: 1px solid #f1f5f9; }
-          .logo-img { height: 28px; width: auto; display: block; margin: 0 auto; }
-          .content { padding: 24px 20px; color: #475569; line-height: 1.6; font-size: 14px; }
-          .content h1 { color: #0f172a; font-size: 18px; font-weight: 600; margin-top: 0; margin-bottom: 16px; letter-spacing: -0.2px; }
+          body { margin: 0; padding: 0; background-color: #f5f3ff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+          .container { max-width: 500px; margin: 40px auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(107, 33, 168, 0.05); border: 1px solid #ede9fe; border-top: 6px solid #6B21A8; }
+          .header { padding: 32px 20px 24px; text-align: center; border-bottom: 1px solid #f8fafc; }
+          .logo-img { height: 64px; width: auto; display: block; margin: 0 auto; }
+          .content { padding: 32px 24px; color: #334155; line-height: 1.6; font-size: 15px; }
+          .content h1 { color: #1e1b4b; font-size: 20px; font-weight: 700; margin-top: 0; margin-bottom: 16px; letter-spacing: -0.2px; }
           .content p { margin: 0 0 16px; }
-          .button { display: inline-block; background-color: #0f172a; color: #ffffff !important; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: 500; font-size: 14px; margin-top: 8px; transition: background-color 0.2s; }
-          .footer { padding: 24px 20px; text-align: center; background-color: #f8fafc; color: #94a3b8; font-size: 12px; }
+          .button { display: inline-block; background-color: #6B21A8; color: #ffffff !important; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 14px; margin-top: 8px; box-shadow: 0 4px 6px -1px rgba(107, 33, 168, 0.2); }
+          .footer { padding: 24px 20px; text-align: center; background-color: #faf5ff; color: #8b5cf6; font-size: 12px; border-top: 1px solid #f3e8ff; }
           .footer p { margin: 0 0 4px 0; }
         </style>
       </head>
@@ -200,10 +200,10 @@ export class EmailChannel {
       <h1>Admin Security Code</h1>
       <p>Hi ${name},</p>
       <p>A sign-in attempt requires further verification. Use the following 6-digit security code to access the CurateWithNG command center.</p>
-      <div style="background-color: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center; border: 1px solid #e2e8f0;">
-        <p style="margin: 0; font-size: 24px; font-family: monospace; font-weight: bold; letter-spacing: 6px; color: #0f172a;">${otpCode}</p>
+      <div style="background-color: #faf5ff; padding: 24px; border-radius: 12px; margin: 24px 0; text-align: center; border: 1px dashed #c084fc;">
+        <p style="margin: 0; font-size: 28px; font-family: monospace; font-weight: bold; letter-spacing: 8px; color: #6B21A8;">${otpCode}</p>
       </div>
-      <p style="color: #64748b; font-size: 12px;">This code will expire in 10 minutes. If you did not request this, please secure your account immediately.</p>
+      <p style="color: #64748b; font-size: 13px;">This code will expire in 10 minutes. If you did not request this, please secure your account immediately.</p>
     `;
     return this.send(to, 'Your Admin Verification Code', this.baseTemplate(content));
   }
