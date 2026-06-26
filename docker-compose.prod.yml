@@ -7,9 +7,9 @@ services:
       - "--providers.docker.exposedbydefault=false"
       - "--entryPoints.web.address=:80"
       - "--entryPoints.websecure.address=:443"
-      - "--certificatesresolvers.errandersresolver.acme.tlschallenge=true"
-      - "--certificatesresolvers.errandersresolver.acme.email=hello@erranders.org" # Adjust to your Let's Encrypt email
-      - "--certificatesresolvers.errandersresolver.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.curatewithngresolver.acme.tlschallenge=true"
+      - "--certificatesresolvers.curatewithngresolver.acme.email=hello@curatewithng.com"
+      - "--certificatesresolvers.curatewithngresolver.acme.storage=/letsencrypt/acme.json"
     ports:
       - "80:80"
       - "443:443"
@@ -17,7 +17,7 @@ services:
       - "./letsencrypt:/letsencrypt"
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
     networks:
-      - erranders-net
+      - curatewithng-net
     labels:
       - "traefik.enable=true"
       # HTTP-to-HTTPS Redirect
@@ -33,7 +33,7 @@ services:
     volumes:
       - redis_data:/var/lib/redis/data
     networks:
-      - erranders-net
+      - curatewithng-net
 
   api:
     image: "${DOCKER_IMAGE:-ghcr.io/marquis-code/curatewithng-backend:latest}" # GHCR Image built and pushed via GitHub Actions
@@ -45,17 +45,17 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
     networks:
-      - erranders-net
+      - curatewithng-net
     labels:
       - "traefik.enable=true"
       # HTTPS router
       - "traefik.http.routers.api.rule=Host(`api.curatewithng.com`)" # Adjust to your production domain
       - "traefik.http.routers.api.entrypoints=websecure"
-      - "traefik.http.routers.api.tls.certresolver=errandersresolver"
+      - "traefik.http.routers.api.tls.certresolver=curatewithngresolver"
       - "traefik.http.services.api.loadbalancer.server.port=4000"
 
 networks:
-  erranders-net:
+  curatewithng-net:
 
 volumes:
   redis_data:
