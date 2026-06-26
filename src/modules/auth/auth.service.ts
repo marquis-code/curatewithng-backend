@@ -127,13 +127,13 @@ export class AuthService {
       throw new UnauthorizedException('Invalid verification attempt');
     }
 
-    const storedOtp = await this.cacheService.get<string | number>(`admin_otp:${email}`);
+    const storedOtp = await this.cacheService.get<string | number>(`admin_otp:${user.email}`);
     if (!storedOtp || String(storedOtp) !== String(otp)) {
       throw new UnauthorizedException('Invalid or expired verification code');
     }
 
     // OTP verified successfully, delete it
-    await this.cacheService.del(`admin_otp:${email}`);
+    await this.cacheService.del(`admin_otp:${user.email}`);
 
     this.emailChannel.sendLoginAlert(user.email, user.firstName, new Date().toLocaleString(), 'Unknown Device').catch(e => this.logger.error(`Failed to send login alert: ${e.message}`));
 
